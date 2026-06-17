@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Candle Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #080b10;
+    --surface: #0e1318;
+    --card: #131920;
+    --border: #1e2830;
+    --border2: #263040;
+    --text: #d4e0ec;
+    --muted: #5a7a94;
+    --accent: #00c9a7;
+    --accent2: #3d8bff;
+    --buy: #00d68f;
+    --sell: #ff4d6a;
+    --wait: #f0a500;
+    --buy-bg: rgba(0,214,143,0.08);
+    --sell-bg: rgba(255,77,106,0.08);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; }
+
+  /* Header */
+  .header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 28px; border-bottom:1px solid var(--border);
+    background:var(--surface);
+  }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo-icon { width:32px; height:32px; background:linear-gradient(135deg,var(--accent),var(--accent2)); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; }
+  .logo-text { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; color:var(--text); letter-spacing:-0.5px; }
+  .logo-text span { color:var(--accent); }
+  .ai-badge { background:linear-gradient(90deg,var(--accent),var(--accent2)); color:#000; font-size:10px; font-weight:700; padding:3px 10px; border-radius:20px; letter-spacing:1px; }
+
+  /* Layout */
+  .main { max-width:1280px; margin:0 auto; padding:24px; display:grid; grid-template-columns:1fr 340px; gap:20px; }
+  @media(max-width:900px){ .main { grid-template-columns:1fr; } }
+
+  /* Controls */
+  .controls { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center; }
+  .ctrl-group { display:flex; gap:8px; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:6px; }
+  .ctrl-btn {
+    background:transparent; border:none; color:var(--muted); font-size:13px; font-family:'Inter',sans-serif;
+    padding:6px 14px; border-radius:6px; cursor:pointer; transition:all 0.2s; font-weight:500;
+  }
+  .ctrl-btn.active, .ctrl-btn:hover { background:var(--border2); color:var(--text); }
+  .ctrl-btn.active { color:var(--accent); }
+
+  select {
+    background:var(--card); border:1px solid var(--border); color:var(--text);
+    padding:8px 14px; border-radius:8px; font-size:13px; font-family:'Inter',sans-serif; cursor:pointer;
+  }
+  .gen-btn {
+    background:linear-gradient(135deg,var(--accent),#00a88a); border:none; color:#000;
+    padding:9px 22px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;
+    font-family:'Inter',sans-serif; transition:all 0.2s; letter-spacing:0.3px;
+  }
+  .gen-btn:hover { opacity:0.85; transform:translateY(-1px); }
+  .gen-btn:disabled { background:#1e2830; color:var(--muted); cursor:not-allowed; transform:none; }
+
+  /* Card */
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:16px; }
+  .card-head { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:16px; font-weight:600; }
+
+  /* Price strip */
+  .price-strip { display:flex; align-items:baseline; gap:12px; margin-bottom:4px; }
+  .price-big { font-family:'JetBrains Mono',monospace; font-size:30px; font-weight:700; color:var(--text); }
+  .price-chg { font-size:13px; font-weight:600; }
+  .price-chg.up { color:var(--buy); }
+  .price-chg.dn { color:var(--sell); }
+  .pair-label { font-size:12px; color:var(--muted); font-weight:500; }
+
+  /* Chart */
+  .chart-area { position:relative; height:260px; margin-top:12px; }
+
+  /* Candle table */
+  .candle-table { width:100%; border-collapse:collapse; font-size:12px; font-family:'JetBrains Mono',monospace; }
+  .candle-table th { color:var(--muted); font-weight:600; padding:6px 8px; text-align:right; border-bottom:1px solid var(--border); font-size:11px; }
+  .candle-table th:first-child { text-align:left; }
+  .candle-table td { padding:6px 8px; text-align:right; border-bottom:1px solid var(--border); color:var(--text); }
+  .candle-table td:first-child { text-align:left; color:var(--muted); }
+  .candle-table tr:last-child td { border:none; }
+  .bull { color:var(--buy) !important; }
+  .bear { color:var(--sell) !important; }
+
+  /* Signal */
+  .signal-main {
+    border-radius:12px; padding:22px; text-align:center; margin-bottom:16px;
+    border:1px solid var(--border); transition:all 0.4s;
+  }
+  .signal-main.BUY { background:var(--buy-bg); border-color:var(--buy); }
+  .signal-main.SELL { background:var(--sell-bg); border-color:var(--sell); }
+  .signal-main.WAIT { background:rgba(240,165,0,0.06); border-color:var(--wait); }
+  .sig-label { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+  .sig-val { font-family:'JetBrains Mono',monospace; font-size:42px; font-weight:700; letter-spacing:3px; }
+  .signal-main.BUY .sig-val { color:var(--buy); }
+  .signal-main.SELL .sig-val { color:var(--sell); }
+  .signal-main.WAIT .sig-val { color:var(--wait); }
+  .sig-conf { margin-top:8px; font-size:13px; color:var(--muted); }
+  .sig-conf b { color:var(--text); }
+
+  /* AI Analysis box */
+  .ai-box {
+    background:var(--surface); border:1px solid var(--border2); border-radius:10px;
+    padding:16px; font-size:13px; line-height:1.7; color:var(--text); min-height:80px;
+    position:relative;
+  }
+  .ai-box.loading { color:var(--muted); }
+  .ai-cursor { display:inline-block; width:2px; height:14px; background:var(--accent); margin-left:2px; animation:blink 1s infinite; vertical-align:middle; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* Pattern tags */
+  .pattern-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .ptag {
+    font-size:11px; padding:3px 10px; border-radius:20px; font-weight:600;
+    border:1px solid; letter-spacing:0.3px;
+  }
+  .ptag.bull { background:rgba(0,214,143,0.1); border-color:rgba(0,214,143,0.3); color:var(--buy); }
+  .ptag.bear { background:rgba(255,77,106,0.1); border-color:rgba(255,77,106,0.3); color:var(--sell); }
+  .ptag.neutral { background:rgba(240,165,0,0.1); border-color:rgba(240,165,0,0.3); color:var(--wait); }
+
+  /* TP/SL */
+  .levels { display:grid; gap:10px; }
+  .level-row { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-radius:8px; background:var(--surface); border:1px solid var(--border); }
+  .level-name { font-size:12px; color:var(--muted); font-weight:500; }
+  .level-val { font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:700; }
+  .level-val.entry { color:var(--accent2); }
+  .level-val.tp { color:var(--buy); }
+  .level-val.sl { color:var(--sell); }
+  .level-val.rr { color:var(--wait); }
+
+  /* Spinner */
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--border2); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  .disclaimer { text-align:center; font-size:11px; color:var(--muted); padding:16px; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">📊</div>
+    <div class="logo-text">Candle<span>AI</span></div>
+  </div>
+  <div class="ai-badge">POWERED BY CLAUDE</div>
+</div>
+
+<div class="main">
+  <!-- LEFT -->
+  <div>
+    <div class="controls">
+      <select id="pairSel">
+        <option value="EURUSD">EUR/USD</option>
+        <option value="GBPUSD">GBP/USD</option>
+        <option value="USDJPY">USD/JPY</option>
+        <option value="AUDUSD">AUD/USD</option>
+        <option value="USDCAD">USD/CAD</option>
+        <option value="GBPJPY">GBP/JPY</option>
+        <option value="XAUUSD">XAU/USD (Gold)</option>
+      </select>
+
+      <div class="ctrl-group" id="tfGroup">
+        <button class="ctrl-btn" onclick="setTF('M1',this)">M1</button>
+        <button class="ctrl-btn active" onclick="setTF('M5',this)">M5</button>
+        <button class="ctrl-btn" onclick="setTF('M15',this)">M15</button>
+        <button class="ctrl-btn" onclick="setTF('H1',this)">H1</button>
+        <button class="ctrl-btn" onclick="setTF('H4',this)">H4</button>
+      </div>
+
+      <button class="gen-btn" id="genBtn" onclick="generate()">⚡ AI Analyze</button>
+    </div>
+
+    <!-- Chart -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div>
+          <div class="pair-label" id="pairDisp">EUR/USD · M5</div>
+          <div class="price-strip">
+            <div class="price-big" id="priceDisp">—</div>
+            <div class="price-chg" id="priceChg"></div>
+          </div>
+        </div>
+        <div id="patternTags" class="pattern-tags"></div>
+      </div>
+      <div class="chart-area"><canvas id="chart"></canvas></div>
+    </div>
+
+    <!-- Candle data -->
+    <div class="card">
+      <div class="card-head">Last 5 Candles (OHLC)</div>
+      <table class="candle-table">
+        <thead><tr><th>#</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Body</th><th>Type</th></tr></thead>
+        <tbody id="candleBody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px;">Click AI Analyze to generate</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div>
+    <!-- Signal -->
+    <div class="signal-main WAIT" id="sigBox">
+      <div class="sig-label">AI Signal</div>
+      <div class="sig-val" id="sigVal">—</div>
+      <div class="sig-conf">Confidence: <b id="confVal">—</b></div>
+    </div>
+
+    <!-- Trade levels -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-head">Trade Levels</div>
+      <div class="levels">
+        <div class="level-row"><span class="level-name">📍 Entry</span><span class="level-val entry" id="entryV">—</span></div>
+        <div class="level-row"><span class="level-name">🎯 Take Profit</span><span class="level-val tp" id="tpV">—</span></div>
+        <div class="level-row"><span class="level-name">🛑 Stop Loss</span><span class="level-val sl" id="slV">—</span></div>
+        <div class="level-row"><span class="level-name">⚖️ R:R Ratio</span><span class="level-val rr" id="rrV">—</span></div>
+      </div>
+    </div>
+
+    <!-- AI Analysis -->
+    <div class="card">
+      <div class="card-head">🤖 Claude AI Analysis</div>
+      <div class="ai-box" id="aiBox">
+        <span style="color:var(--muted)">AI analysis will appear here after you click "AI Analyze"...</span>
+      </div>
+    </div>
+
+    <div class="disclaimer">⚠️ এটি শিক্ষামূলক উদ্দেশ্যে তৈরি। Real trading-এ নিজের বিচার ও risk management ব্যবহার করুন।</div>
+  </div>
+</div>
+
+<script>
+const BASES = { EURUSD:1.08450, GBPUSD:1.27320, USDJPY:149.850, AUDUSD:0.65210, USDCAD:1.36540, GBPJPY:190.640, XAUUSD:2325.50 };
+const DECS  = { EURUSD:5, GBPUSD:5, USDJPY:3, AUDUSD:5, USDCAD:5, GBPJPY:3, XAUUSD:2 };
+const VOLS  = { EURUSD:0.0008, GBPUSD:0.001, USDJPY:0.12, AUDUSD:0.0007, USDCAD:0.0008, GBPJPY:0.15, XAUUSD:3.5 };
+
+let currentTF = 'M5';
+let chartInst = null;
+
+function setTF(tf, el){
+  currentTF = tf;
+  document.querySelectorAll('#tfGroup .ctrl-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function genCandles(pair, count=30){
+  let base = BASES[pair];
+  let vol = VOLS[pair];
+  let candles = [];
+  let close = base * (0.998 + Math.random()*0.004);
+  let trend = (Math.random()-0.5)*vol*0.3;
+
+  for(let i=0;i<count;i++){
+    trend = trend*0.85 + (Math.random()-0.5)*vol*0.2;
+    let open = close;
+    let bodySize = vol*(0.3+Math.random()*1.5);
+    close = open + (Math.random()<0.5+trend/vol ? bodySize : -bodySize) + trend;
+    let high = Math.max(open,close) + vol*Math.random()*0.8;
+    let low  = Math.min(open,close) - vol*Math.random()*0.8;
+    candles.push({ o:open, h:high, l:low, c:close });
+  }
+  return candles;
+}
+
+function drawChart(candles, pair){
+  const dec = DECS[pair];
+  const labels = candles.map((_,i)=>i);
+
+  // Line for simplicity + colored segments
+  const closes = candles.map(c=>+c.c.toFixed(dec));
+
+  if(chartInst) chartInst.destroy();
+  const ctx = document.getElementById('chart').getContext('2d');
+
+  // Color each segment
+  const segColors = [];
+  for(let i=1;i<candles.length;i++){
+    segColors.push(candles[i].c >= candles[i-1].c ? '#00d68f' : '#ff4d6a');
+  }
+
+  chartInst = new Chart(ctx,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        data:closes,
+        borderColor: ctx => {
+          const i = ctx.dataIndex;
+          if(i===0) return '#00d68f';
+          return candles[i].c >= candles[i-1].c ? '#00d68f':'#ff4d6a';
+        },
+        segment:{ borderColor: ctx => candles[ctx.p1DataIndex]?.c >= candles[ctx.p0DataIndex]?.c ? '#00d68f':'#ff4d6a' },
+        pointRadius:0,
+        borderWidth:1.5,
+        fill:false,
+        tension:0.2
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:{duration:400},
+      plugins:{legend:{display:false},tooltip:{
+        callbacks:{ label: ctx => `Price: ${ctx.raw.toFixed(dec)}` }
+      }},
+      scales:{
+        x:{display:false},
+        y:{grid:{color:'#1e2830'},ticks:{color:'#5a7a94',font:{size:10,family:'JetBrains Mono'},maxTicksLimit:5}}
+      }
+    }
+  });
+}
+
+function detectPatterns(candles){
+  const last5 = candles.slice(-5);
+  const patterns = [];
+  const c = last5;
+  const L = c.length-1;
+
+  // Doji
+  let body = Math.abs(c[L].c - c[L].o);
+  let range = c[L].h - c[L].l;
+  if(body < range*0.1) patterns.push({name:'Doji',type:'neutral'});
+
+  // Hammer
+  let lowerWick = Math.min(c[L].o,c[L].c) - c[L].l;
+  let upperWick = c[L].h - Math.max(c[L].o,c[L].c);
+  if(lowerWick > body*2 && upperWick < body*0.5 && c[L].c > c[L].o) patterns.push({name:'Hammer',type:'bull'});
+
+  // Shooting Star
+  if(upperWick > body*2 && lowerWick < body*0.5 && c[L].c < c[L].o) patterns.push({name:'Shooting Star',type:'bear'});
+
+  // Engulfing
+  if(L>=1){
+    if(c[L].o < c[L-1].c && c[L].c > c[L-1].o && c[L].c > c[L].o) patterns.push({name:'Bullish Engulfing',type:'bull'});
+    if(c[L].o > c[L-1].c && c[L].c < c[L-1].o && c[L].c < c[L].o) patterns.push({name:'Bearish Engulfing',type:'bear'});
+  }
+
+  // Three soldiers/crows
+  if(L>=2){
+    if(c[L].c>c[L].o && c[L-1].c>c[L-1].o && c[L-2].c>c[L-2].o) patterns.push({name:'Three White Soldiers',type:'bull'});
+    if(c[L].c<c[L].o && c[L-1].c<c[L-1].o && c[L-2].c<c[L-2].o) patterns.push({name:'Three Black Crows',type:'bear'});
+  }
+
+  // Morning/Evening Star
+  if(L>=2){
+    let midBody = Math.abs(c[L-1].c - c[L-1].o);
+    if(c[L-2].c < c[L-2].o && midBody < range*0.15 && c[L].c > c[L].o) patterns.push({name:'Morning Star',type:'bull'});
+    if(c[L-2].c > c[L-2].o && midBody < range*0.15 && c[L].c < c[L].o) patterns.push({name:'Evening Star',type:'bear'});
+  }
+
+  if(patterns.length === 0) patterns.push({name:'No Clear Pattern',type:'neutral'});
+  return patterns;
+}
+
+async function generate(){
+  const pair = document.getElementById('pairSel').value;
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Generating...';
+
+  // Generate candles
+  const candles = genCandles(pair, 30);
+  const dec = DECS[pair];
+  const last = candles[candles.length-1];
+  const prev = candles[candles.length-2];
+  const pips = ((last.c - prev.c) / (pair.includes('JPY') ? 0.01 : 0.0001)).toFixed(1);
+
+  // Update price display
+  document.getElementById('pairDisp').textContent = pair.slice(0,3)+'/'+pair.slice(3)+' · '+currentTF;
+  document.getElementById('priceDisp').textContent = last.c.toFixed(dec);
+  const chgEl = document.getElementById('priceChg');
+  chgEl.textContent = (pips>0?'+':'')+pips+' pips';
+  chgEl.className = 'price-chg '+(pips>0?'up':'dn');
+
+  // Draw chart
+  drawChart(candles, pair);
+
+  // Patterns
+  const patterns = detectPatterns(candles);
+  const tagEl = document.getElementById('patternTags');
+  tagEl.innerHTML = patterns.map(p=>`<span class="ptag ${p.type}">${p.name}</span>`).join('');
+
+  // Candle table (last 5)
+  const last5 = candles.slice(-5);
+  const tbody = document.getElementById('candleBody');
+  tbody.innerHTML = last5.map((c,i)=>{
+    const bull = c.c > c.o;
+    const bodyPips = Math.abs(c.c-c.o)/(pair.includes('JPY')?0.01:0.0001);
+    return `<tr>
+      <td>${i===4?'<b style="color:var(--accent)">Latest</b>':(-4+i)}</td>
+      <td>${c.o.toFixed(dec)}</td>
+      <td>${c.h.toFixed(dec)}</td>
+      <td>${c.l.toFixed(dec)}</td>
+      <td class="${bull?'bull':'bear'}">${c.c.toFixed(dec)}</td>
+      <td>${bodyPips.toFixed(1)}</td>
+      <td class="${bull?'bull':'bear'}">${bull?'▲ Bull':'▼ Bear'}</td>
+    </tr>`;
+  }).join('');
+
+  // AI analysis
+  const aiBox = document.getElementById('aiBox');
+  aiBox.innerHTML = '<span class="spin"></span><span style="color:var(--muted)">Claude analyzing candles...</span>';
+
+  // Build candle summary for Claude
+  const candleSummary = last5.map((c,i)=>{
+    const bull = c.c>c.o;
+    const body = Math.abs(c.c-c.o);
+    const range = c.h-c.l;
+    const lWick = Math.min(c.o,c.c)-c.l;
+    const uWick = c.h-Math.max(c.o,c.c);
+    return `Candle ${i+1}(${i===4?'LATEST':''}): O=${c.o.toFixed(dec)} H=${c.h.toFixed(dec)} L=${c.l.toFixed(dec)} C=${c.c.toFixed(dec)} | ${bull?'Bullish':'Bearish'} | Body=${(body/range*100).toFixed(0)}% of range | LowerWick=${(lWick/range*100).toFixed(0)}% UpperWick=${(uWick/range*100).toFixed(0)}%`;
+  }).join('\n');
+
+  const patternNames = patterns.map(p=>p.name).join(', ');
+
+  const prompt = `You are a professional Forex technical analyst. Analyze these ${currentTF} candlestick data for ${pair.slice(0,3)}/${pair.slice(3)} and provide a trading signal.
+
+CANDLE DATA (last 5 candles):
+${candleSummary}
+
+DETECTED PATTERNS: ${patternNames}
+
+Provide your analysis in this EXACT format:
+SIGNAL: [BUY/SELL/WAIT]
+CONFIDENCE: [High/Medium/Low]
+ENTRY: [price]
+TP: [price]  
+SL: [price]
+ANALYSIS: [2-3 sentences in simple English explaining the key candlestick signals, what the patterns mean, and why you chose this signal. Be specific about the candle shapes.]`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:500,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    const data = await resp.json();
+    const text = data.content?.[0]?.text || '';
+
+    // Parse response
+    const sigMatch = text.match(/SIGNAL:\s*(BUY|SELL|WAIT)/i);
+    const confMatch = text.match(/CONFIDENCE:\s*(High|Medium|Low)/i);
+    const entryMatch = text.match(/ENTRY:\s*([\d.]+)/i);
+    const tpMatch = text.match(/TP:\s*([\d.]+)/i);
+    const slMatch = text.match(/SL:\s*([\d.]+)/i);
+    const analysisMatch = text.match(/ANALYSIS:\s*(.+)/is);
+
+    const signal = sigMatch?.[1]?.toUpperCase() || 'WAIT';
+    const conf = confMatch?.[1] || 'Low';
+    const entry = entryMatch?.[1] || last.c.toFixed(dec);
+    const tp = tpMatch?.[1] || '—';
+    const sl = slMatch?.[1] || '—';
+    const analysis = analysisMatch?.[1]?.trim() || text;
+
+    // Update signal box
+    const sigBox = document.getElementById('sigBox');
+    sigBox.className = 'signal-main '+signal;
+    document.getElementById('sigVal').textContent = signal;
+    document.getElementById('confVal').textContent = conf;
+
+    // Trade levels
+    document.getElementById('entryV').textContent = entry;
+    document.getElementById('tpV').textContent = tp;
+    document.getElementById('slV').textContent = sl;
+    document.getElementById('rrV').textContent = tp!=='—' && sl!=='—' ? '1 : 1.5' : '—';
+
+    // AI box with typewriter
+    aiBox.innerHTML = '';
+    let i=0;
+    const cursor = '<span class="ai-cursor"></span>';
+    const typeWriter = setInterval(()=>{
+      if(i<analysis.length){
+        aiBox.innerHTML = analysis.slice(0,i+1)+cursor;
+        i++;
+      } else {
+        aiBox.innerHTML = analysis;
+        clearInterval(typeWriter);
+      }
+    }, 18);
+
+  } catch(err) {
+    aiBox.innerHTML = '<span style="color:var(--sell)">AI analysis failed. Please try again.</span>';
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '⚡ AI Analyze';
+}
+</script>
+</body>
+</html>
